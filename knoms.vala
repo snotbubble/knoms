@@ -1434,10 +1434,82 @@ public class hnwin : Gtk.ApplicationWindow {
 		Gtk.CssProvider drpcsp = new Gtk.CssProvider();
 		string drpcss = ".xx { border-radius: 0; border-color: %s; background: %s; color: %s; }".printf(sblines,sbbackground,sbselect);
 		drpcsp.load_from_data(drpcss.data);
+
+		Gtk.CssProvider hovcsp = new Gtk.CssProvider();
+		string hovcss = ".xx { border-radius: 0; border-color: %s; background: %s; color: %s; }\n.xx:hover { background: %s; color: %s; }".printf(sblines,sbbackground,sbselect,sbselect,sblines);
+		hovcsp.load_from_data(hovcss.data);
+
+		Gtk.CssProvider transcsp = new Gtk.CssProvider();
+		string transcss = ".xx { border-radius: 0; border-color: %s; background: %s; color: inherit; }".printf(sblines,"#00000000");
+		transcsp.load_from_data(transcss.data);
+
+// let's ride the crazytrain to loosertown...
+
 		oplist.get_first_child().get_style_context().add_provider(drpcsp, Gtk.STYLE_PROVIDER_PRIORITY_USER);
 		oplist.get_first_child().get_style_context().add_class("xx");
-		oplist.get_last_child().get_style_context().add_provider(drpcsp, Gtk.STYLE_PROVIDER_PRIORITY_USER);
-		oplist.get_last_child().get_style_context().add_class("xx");
+
+		// oplist.Box
+		oplist.get_last_child().get_first_child().get_first_child().get_style_context().add_provider(transcsp, Gtk.STYLE_PROVIDER_PRIORITY_USER);
+		oplist.get_last_child().get_first_child().get_first_child().get_style_context().add_class("xx");
+
+		// oplist.Box.Box
+		oplist.get_last_child().get_first_child().get_first_child().get_first_child().get_style_context().add_provider(drpcsp, Gtk.STYLE_PROVIDER_PRIORITY_USER);
+		oplist.get_last_child().get_first_child().get_first_child().get_first_child().get_style_context().add_class("xx");
+
+		// oplist.Box.Box.ScrolledWindow
+ 		oplist.get_last_child().get_first_child().get_first_child().get_first_child().get_next_sibling().get_style_context().add_provider(drpcsp, Gtk.STYLE_PROVIDER_PRIORITY_USER);
+		 oplist.get_last_child().get_first_child().get_first_child().get_first_child().get_next_sibling().get_style_context().add_class("xx");
+
+		// oplist.Box.Box.ScrolledWindow.ListBox
+		oplist.get_last_child().get_first_child().get_first_child().get_last_child().get_first_child().get_style_context().add_provider(drpcsp, Gtk.STYLE_PROVIDER_PRIORITY_USER);
+		oplist.get_last_child().get_first_child().get_first_child().get_last_child().get_first_child().get_style_context().add_class("xx");
+
+		// oplist.Box.Box.ScrolledWindow.ListBox.Row[]
+		Gtk.Widget ch = oplist.get_last_child().get_first_child().get_first_child().get_last_child().get_first_child().get_first_child();
+		while(ch != null) {
+			ch.get_style_context().add_provider(hovcsp, Gtk.STYLE_PROVIDER_PRIORITY_USER);
+			ch.get_style_context().add_class("xx");
+			// Row.Box
+			ch.get_first_child().get_style_context().add_provider(transcsp, Gtk.STYLE_PROVIDER_PRIORITY_USER);
+			ch.get_first_child().get_style_context().add_class("xx");
+			// Row.Box.Label
+			ch.get_first_child().get_first_child().get_style_context().add_provider(transcsp, Gtk.STYLE_PROVIDER_PRIORITY_USER);
+			ch.get_first_child().get_first_child().get_style_context().add_class("xx");
+			ch = ch.get_next_sibling();
+		}
+
+		reftypelist.get_first_child().get_style_context().add_provider(drpcsp, Gtk.STYLE_PROVIDER_PRIORITY_USER);
+		reftypelist.get_first_child().get_style_context().add_class("xx");
+
+		// reftypelist.Box
+		reftypelist.get_last_child().get_first_child().get_first_child().get_style_context().add_provider(transcsp, Gtk.STYLE_PROVIDER_PRIORITY_USER);
+		reftypelist.get_last_child().get_first_child().get_first_child().get_style_context().add_class("xx");
+
+		// reftypelist.Box.Box
+		reftypelist.get_last_child().get_first_child().get_first_child().get_first_child().get_style_context().add_provider(drpcsp, Gtk.STYLE_PROVIDER_PRIORITY_USER);
+		reftypelist.get_last_child().get_first_child().get_first_child().get_first_child().get_style_context().add_class("xx");
+
+		// reftypelist.Box.Box.ScrolledWindow
+ 		reftypelist.get_last_child().get_first_child().get_first_child().get_first_child().get_next_sibling().get_style_context().add_provider(drpcsp, Gtk.STYLE_PROVIDER_PRIORITY_USER);
+		 reftypelist.get_last_child().get_first_child().get_first_child().get_first_child().get_next_sibling().get_style_context().add_class("xx");
+
+		// reftypelist.Box.Box.ScrolledWindow.ListBox
+		reftypelist.get_last_child().get_first_child().get_first_child().get_last_child().get_first_child().get_style_context().add_provider(drpcsp, Gtk.STYLE_PROVIDER_PRIORITY_USER);
+		reftypelist.get_last_child().get_first_child().get_first_child().get_last_child().get_first_child().get_style_context().add_class("xx");
+
+		// reftypelist.Box.Box.ScrolledWindow.ListBox.Row[]
+		ch = reftypelist.get_last_child().get_first_child().get_first_child().get_last_child().get_first_child().get_first_child();
+		while(ch != null) {
+			ch.get_style_context().add_provider(hovcsp, Gtk.STYLE_PROVIDER_PRIORITY_USER);
+			ch.get_style_context().add_class("xx");
+			// Row.Box
+			ch.get_first_child().get_style_context().add_provider(transcsp, Gtk.STYLE_PROVIDER_PRIORITY_USER);
+			ch.get_first_child().get_style_context().add_class("xx");
+			// Row.Box.Label
+			ch.get_first_child().get_first_child().get_style_context().add_provider(transcsp, Gtk.STYLE_PROVIDER_PRIORITY_USER);
+			ch.get_first_child().get_first_child().get_style_context().add_class("xx");
+			ch = ch.get_next_sibling();
+		}
 
 // toggle buttons
 
