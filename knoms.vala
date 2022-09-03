@@ -2,6 +2,66 @@
 // knowledge management system
 // by c.p.brown 2022
 
+// short term goals
+//
+// - create a simple page/article website:
+//
+//   nodes                                                 list
+//
+//                 +---------+                             +-----------------+
+//                 | artilce |                             | save            |
+//                 +---------+                             +-----------------+
+// +-------------+  | +---------+      +-------------+       +---------------+
+// | header.html |  | | article |      | footer.html |       | merge         |
+// +-------------+  | +---------+      +-------------+       +---------------+
+//         \        |  |                 /                     +-------------+
+//          \       |  | +---------+    /                      | header.html |
+//           \      |  | | article |   /                       +-------------+
+//            \     |  | +---------+  /                        +-------------+
+//             \    |  |      |      /                         | article     |
+//              \   |  |      |     /                          +-------------+
+//               \  |  |      |    /                           +-------------+
+//               +--------------------+                        | article     |
+//               | merge              |                        +-------------+
+//               +--------------------+                        +-------------+
+//                         |                                   | article     |
+//                     +-------+                               +-------------+
+//                     | save  |                               +-------------+
+//                     +-------+                               | footer.html |
+//                                                             +-------------+
+//
+//
+// - link custom parameters, create scripted custom parameters that can use input vals:
+//
+//    nodes                                                                              list
+//
+//  +---------+      +----------+          +--------------+  +--------+  +------+   ┌───┬─────────────────────────┐
+//  | invoice |      | person   |          | project      |--| script |--| save |   │ - │ save                    │
+//  +=========+      +==========+          +==============+  +--------+  +------+   ├───┼───┬─────────────────────┤
+//  | total   |------| fees     |      +---| labor        |                         │   │ - │ script              │
+//  +---------+     /+----------+     /    +--------------+                         ├ - └───┼───┬─────────────────┤
+//  +---------+    / | fees ytd |----+   +-| licenses     |                         │       │ - │ project         │
+//  | invoice |   /  +----------+       /  +--------------+                         ├ - - - └───┼───┬─────────────┤
+//  +=========+  /     +----------+    +                                            │           │ - │ company     │
+//  | total   |-+      | company  |    |                                            ├ - - - - - └───┴───┬─────────┤
+//  +---------+        +==========+    |                                            │                   │ invoice │
+//                   +-| fees     |    +                                            ├ - - - - - ┌───┬───┴─────────┤
+//  +---------+     /  +----------+   /                                             │           │ - │ person      │
+//  | invoice |    /   | fees ytd |--+                                              ├ - - - - - └───┴───┬─────────┤
+//  +=========+   /    +----------+                                                 │                   │ invoice │
+//  | total   |--+                                                                  ├ - - - - - - - - - ├─────────┤
+//  +---------+                                                                     │                   │ invoice │
+//                                                                                  └───────────────────┴─────────┘
+//                                                                                                       
+//                                                                                            
+// - stash nodes in subnetworks:
+//
+//  +---------------+   +--------+  +--------------+
+//  | library       |+--| filter |--| make website |+
+//  |_______________||  +--------+  |______________||
+//   +---------------+               +--------------+
+
+
 // status:
 // making the ui...
 
@@ -11,6 +71,7 @@
 // dones are removed, unless something depends on it
 //
 // - [!] finish reflow of params
+// - [!] fix node scale issues
 // - [ ] make sb color theme for gtksourceview
 // - [ ] beastmode layout: 2x vertical paned, output in left, editor in middle, node and params in right horizontal paned
 // - [ ] node text scale
@@ -19,17 +80,17 @@
 //       name: ;@[name:tag:<name goes here>]
 //       enabled: ;@[ena:bool:false]
 //       items: ;@[itm:block:["one" "two" "three"]]
-// - [!] fix node scale issues
 // - [ ] node expand/collapse with custom params
-// - [ ] experiment with link drawing: tapered line, line, curve, box-snap
-// - [ ] sloppy link and unlink
 // - [ ] link ports
+// - [ ] link drawing
+// - [ ] sloppy link and unlink
 // - [ ] link data:
 //       string       idx : link hash
 //       string[]     inp : link input (node hash)
 //       string[]     oup : link output (node hash)
 //       string       col : link color
 //       double       fat : link width
+//       string       typ : link type: parameter or node
 // - [ ] link selection
 
 using Gtk;
