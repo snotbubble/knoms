@@ -10,40 +10,31 @@
 // ? = needs research (brute-force trial & error)
 // dones are removed, unless something depends on it
 //
-// - [ ] phone layout: everything in one swisher, editor, output, params, nodes
-// - [ ] notebook layout: vertical paned, editor and output in left swisher, nodes and params in right horizontal paned
+// - [!] finish reflow of params
+// - [ ] make sb color theme for gtksourceview
 // - [ ] beastmode layout: 2x vertical paned, output in left, editor in middle, node and params in right horizontal paned
-// - [ ] default node params:
-//       string      nom : node name
-//       string      typ : source type: "text" "html" "xml" "rebol" "python" "sh" "vala"
-//       string      src : source code
-//       string      pre : preset file
-//       bool        hoi : node enbled
-//       bool        frz : node frozen (cahced)
-//       string      idx : node hash
-//       string[]    oup : node outputs (of node hashes), used to build a list for multi-select and highlighting
-//       string[]    inp : node inputs (of node hashes), used to build a list for eval
-//       string      res : node result (if cached)
-//       double      pox : node position x, from top-left corner
-//       double      poy : node position y
-//       bool        ste : node state: false = unselected, true = selected
-//       bool        hil : node highlight state
-//       glib.color: col : node tint color
-//       params[]    cpa : custom parameters
-// - [ ] default link params:
-//       string     idx : link hash
-//       string     inp : link input (node hash)
-//       string     oup : link output (node hash)
-//       glib.color col : link tint color
+// - [ ] node text scale
 // - [ ] add and remove fields per node using code tags: //@[filedname:fieldtype:fielddefaultval:valmin:valmax], where '//' is the language escape char, eg:
 //       percent: ;@[percent:float:50.0:0.0:100.0] <- this gets subbed with field val before eval
 //       name: ;@[name:tag:<name goes here>]
 //       enabled: ;@[ena:bool:false]
 //       items: ;@[itm:block:["one" "two" "three"]]
+// - [!] fix node scale issues
+// - [ ] node expand/collapse with custom params
+// - [ ] experiment with link drawing: tapered line, line, curve, box-snap
+// - [ ] sloppy link and unlink
+// - [ ] link ports
+// - [ ] link data:
+//       string       idx : link hash
+//       string[]     inp : link input (node hash)
+//       string[]     oup : link output (node hash)
+//       string       col : link color
+//       double       fat : link width
+// - [ ] link selection
 
 using Gtk;
 
-int selectednode;
+string selectednode;
 
 // data containers
 
@@ -59,9 +50,9 @@ struct params {
 
 struct knode {
 	string      nom;	// node name
-	string      typ;	// source type: "text" "html" "xml" "rebol" "python" "sh" "vala"
+	string      typ;	// node type: "Load", "Save", "Merge", "ForEach", "Switch", "Sequence", "Join", "Script"
 	string      src;	// source code
-	string		cex;	// source type
+	string		cex;	// srouce type: "text" "html" "xml" "rebol" "python" "sh" "vala"
 	string		lod;	// file to load/save, if type == 0 or 1
 	string		lex;	// type of the above
 	string      pre;	// preset file
@@ -76,7 +67,7 @@ struct knode {
 	double      poy;	// node position y
 	bool        ste;	// node state: false = unselected, true = selected
 	bool        hil;	// node highlight state
-	Gdk.RGBA	col;	// node tint color
+	string		col;	// node tint color
 	params[]    cpa;	// custom parameters
 }
 
@@ -454,6 +445,12 @@ public class hnwin : Gtk.ApplicationWindow {
 	private Gtk.Box firstrow;
 	private Gtk.Box secondrow;
 	private Gtk.Box thirdrow;
+	private Gtk.DropDown oplist;
+	private Gtk.Entry nameentry;
+	private Gtk.ToggleButton enabledbutton;
+	private Gtk.ToggleButton freezebutton;
+	private Gtk.Entry fileentry;
+	private Gtk.Entry presetentry;
 	private GtkSource.View srctext;
 	private string extname (string e) {
 		string o = "html";
@@ -485,7 +482,7 @@ public class hnwin : Gtk.ApplicationWindow {
 		}
 		return o;
 	}
-	public void reflowparams (int sx) {
+	private void reflowparams (int sx) {
 
 // cause flowbox is just a shitty nxn grid
 
@@ -538,37 +535,135 @@ public class hnwin : Gtk.ApplicationWindow {
 			}
 		}
 	}
+	private int getoplistindex (string t) {
+		int o = 0;
+		Gtk.Widget ch = oplist.get_last_child().get_first_child().get_first_child().get_last_child().get_first_child().get_first_child();
+		int i = 0;
+		while(ch != null) {
+			var ll = ((Gtk.Label) ch.get_first_child().get_first_child());
+			if (ll.label == t) { o = i; break; }
+			ch = ch.get_next_sibling();
+			i = i + 1;
+		}
+		return o;
+	}
+	private void selectnode (string x) {
+		if (allknodes.length > 0) {
+			if (x != null) {
+				if (x != "none") {
+					int n = 0;
+					for( int i = 0; i < allknodes.length; i++) {
+						if (allknodes[i].idx == x) { n = i; break; }
+					}
+					doup = false;
+					print("old selected node is: %s\n",selectednode);
+					selectednode = allknodes[n].idx;
+					print("new selected node is: %s\n",selectednode);
+					if (allknodes[n].nom != null) {
+						nameentry.text = allknodes[n].nom;
+					}
+					if (allknodes[n].lod != null) {
+						fileentry.text = allknodes[n].lod;
+					}
+					if (allknodes[n].pre != null) {
+						presetentry.text = allknodes[n].pre;
+					}
+					if (allknodes[n].typ != null) {
+						int styp = getoplistindex(allknodes[n].typ);
+						oplist.set_selected(styp);
+					}
+					if (allknodes[n].nom != null) {
+						enabledbutton.active = allknodes[n].hoi;
+					}
+					if (allknodes[n].nom != null) {
+						freezebutton.active = allknodes[n].frz;
+					}
+					if (allknodes[n].src != null) {
+						srctext.buffer.set_text(allknodes[n].src);
+					}
+					doup = true;
+				}
+			}
+		}
+	}
+	private int getselectednode ( string x ) {
+		if (allknodes.length > 0) {
+			if (x != null) {
+				if (x != "none") {
+					for( int i = 0; i < allknodes.length; i++) {
+						if (allknodes[i].idx == x) { return i; }
+					}
+				}
+			}
+		}
+		return 0;
+	}
 	public hnwin (Gtk.Application knoms) {Object (application: knoms);}
 	construct {
-	doup = false;
-	thf = true;
-	twf = true;
-	tnf = true;
-	amphone = true;
-	amdesktop = false;
-	ambeastmode = false;
-	selectednode = 0;
 
-	string pagebg = "#6B3521FF";	// zn orange
-	string pagefg = "#BD4317FF";
-	string artcbg = "#112633FF";	// sb blue
-	string artcfg = "#1A3B4FFF";
+		doup = false;
+		thf = true;
+		twf = true;
+		tnf = true;
+		amphone = true;
+		amdesktop = false;
+		ambeastmode = false;
+		selectednode = "none";
 
-	string bod_hi = "#5FA619FF";	// green
-	string bod_lo = "#364F1DFF";
+// named colors
 
-	string tal_hi = "#14A650FF";	// turqoise
-	string tal_lo = "#1D5233FF";
+		string pagebg = "#6B3521FF";		// zn orange
+		string pagefg = "#BD4317FF";
+		string artcbg = "#112633FF";		// sb blue
+		string artcfg = "#1A3B4FFF";
 
-	string sbbackground = "#112633FF";	// sb blue
-	string sbselect = "#327299FF";
-	string sblines = "#08131AFF";
-	string sblight = "#19394DFF";
-	string sbshade = "#0C1D26FF";
-	string sbentry = "#0E232EFF";
+		string bod_hi = "#5FA619FF";		// green
+		string bod_lo = "#364F1DFF";
 
-	string out_hi = "#8738A1FF";	// purple
-	string out_lo = "#351C3DFF";
+		string tal_hi = "#14A650FF";		// turqoise
+		string tal_lo = "#1D5233FF";
+
+		string sbbackground = "#112633FF";	// sb blue
+		string sbselect = "#327299FF";
+		string sblines = "#08131AFF";
+		string sblight = "#19394DFF";
+		string sbshade = "#0C1D26FF";
+		string sbentry = "#0E232EFF";
+
+		string out_hi = "#8738A1FF";		// purple
+		string out_lo = "#351C3DFF";
+
+// interaction states
+
+		bool	izom = false;	// zoom mode
+		bool	ipan = false;	// pan mode
+		bool	iscr = false;	// scroll mode
+		bool	ipik = false;	// pick mode
+		bool	igrb = false;	// grab mode
+		int		drwm = 0;		// what to draw: 0 = nodes, 1 = list
+		bool	dosel = false;	// select a node
+
+// graph memory
+
+		double[] 	ng_moom = {0.0,0.0};		// graph live mousemove xy
+		double[] 	ng_mdwn = {0.0,0.0};		// graph live mousedown xy
+		double[] 	ng_olsz = {300.0,300.0};	// graph pre-draw size xy
+		double[] 	ng_olof = {0.0,0.0};		// graph pre-draw offset xy
+		double[] 	ng_olmd = {0.0,0.0};		// graph pre-draw mousedown xy
+		double		ng_olbh = 10.0;				// graph pre-draw bar height
+		double 		ng_posx = 0.0;				// graph post-draw offset x
+		double 		ng_posy = 0.0;				// graph post_draw offset y
+		double		ng_sizx	= 0.0;				// graph post-draw size x
+		double		ng_sizy = 0.0;				// graph post-draw size y 
+		double 		ng_trgx	= 0.0;				// graph post-draw mousedown x
+		double 		ng_trgy = 0.0;				// graph post-draw moudedown y
+		double 		ng_barh = 30.0;				// graph row height
+		int 		ng_rule = 0;				// graph selected rule
+		double[]	ng_rssz = {300.0,300.0};	// graph pre-draw size memory for isolate
+		double[]	ng_rsof = {40.0,20.0};		// graph pre-draw offset memory for isolate
+		int			ng_node = 0;				// graph selected node list position
+		double		ng_nox = 0.0;				// node x pos
+		double		ng_noy = 0.0;				// node y pos
 
 // window
 
@@ -597,40 +692,42 @@ public class hnwin : Gtk.ApplicationWindow {
 // node parameters
 
 		print("building node parameters...\n");
-		Gtk.Entry nameentry = new Gtk.Entry();
+		nameentry = new Gtk.Entry();
 		nameentry.hexpand = true;
 		nameentry.changed.connect(() => {
 			if (doup) {
 				doup = false;
 				if (nameentry.text != null) {
 					if (nameentry.text.strip() != "") {
-						allknodes[selectednode].nom = nameentry.text;
+						int sidx = getselectednode(selectednode);
+						allknodes[sidx].nom = nameentry.text;
 					}
 				}
 				doup = true;
 			}
 		});
 
-		Gtk.DropDown oplist = new Gtk.DropDown(null,null);
+		oplist = new Gtk.DropDown(null,null);
 		oplist.set_model(new Gtk.StringList({"Load", "Save", "Merge", "ForEach", "Switch", "Sequence", "Join", "Script"}));
 		oplist.set_selected(0);
 		oplist.notify["selected"].connect(() => {
 			if (doup) {
 				doup = false;
 				var n = oplist.get_selected();
-				allknodes[selectednode].typ = ((StringObject?) oplist.selected_item).string;
+				int sidx = getselectednode(selectednode);
+				allknodes[sidx].typ = ((StringObject?) oplist.selected_item).string;
 				doup = true;
 			}
 		});
 
-		Gtk.ToggleButton freezebutton = new Gtk.ToggleButton();
+		freezebutton = new Gtk.ToggleButton();
 		freezebutton.icon_name = "system-lock-screen";
 		freezebutton.set_active(false);
 		freezebutton.toggled.connect(() => {
 			print("freezebutton toggled: %s\n",freezebutton.active.to_string());
 		});
 
-		Gtk.ToggleButton enabledbutton = new Gtk.ToggleButton();
+		enabledbutton = new Gtk.ToggleButton();
 		enabledbutton.set_active(true);
 		Gtk.CssProvider enabledcsp = new Gtk.CssProvider();
 		string enabledcss = ".xx { background: #00FF0020; }";
@@ -641,7 +738,8 @@ public class hnwin : Gtk.ApplicationWindow {
 		enabledbutton.toggled.connect(() => {
 			if (doup) {
 				doup = false;
-				allknodes[selectednode].hoi = enabledbutton.active;
+				int sidx = getselectednode(selectednode);
+				allknodes[sidx].hoi = enabledbutton.active;
 				if (enabledbutton.active) { 
 					enabledcss = ".xx { background: #00FF0020; }";
 					enabledcsp.load_from_data(enabledcss.data);
@@ -717,7 +815,7 @@ public class hnwin : Gtk.ApplicationWindow {
 
 		print("building node filebox parameters...\n");
 		Gtk.Box filebox = new Gtk.Box(HORIZONTAL,5);
-		Gtk.Entry fileentry = new Gtk.Entry();
+		fileentry = new Gtk.Entry();
 		fileentry.hexpand = true;
 		Gtk.CssProvider fesp = new Gtk.CssProvider();
 		string fess = ".xx { background: #00000010; }";
@@ -727,13 +825,14 @@ public class hnwin : Gtk.ApplicationWindow {
 		fileentry.changed.connect(() => {
 			if (doup) {
 				doup = false;
-				allknodes[selectednode].cex = "sh";
+				int sidx = getselectednode(selectednode);
+				allknodes[sidx].cex = "sh";
 				File lodfile = getfiledir(fileentry.text);
 				print("lodfile is %s\n",lodfile.get_path());
 				if (lodfile.query_exists() == true) {
-					allknodes[selectednode].lod = fileentry.text;
-					allknodes[selectednode].lex = getfileext(fileentry.text);
-					allknodes[selectednode].rex = allknodes[selectednode].lex;
+					allknodes[sidx].lod = fileentry.text;
+					allknodes[sidx].lex = getfileext(fileentry.text);
+					allknodes[sidx].rex = allknodes[sidx].lex;
 					fess = ".xx { background: #00FF0020; }";
 					fesp.load_from_data(fess.data);
 				} else {
@@ -769,7 +868,8 @@ public class hnwin : Gtk.ApplicationWindow {
 					filepopbox.remove(filepopbox.get_first_child());
 				}
 				string scandir = "source";
-				if (allknodes[selectednode].typ == "Save") { scandir = "output"; }
+				int sidx = getselectednode(selectednode);
+				if (allknodes[sidx].typ == "Save") { scandir = "output"; }
 				string pth = GLib.Environment.get_current_dir();
 				File srcpath = File.new_for_path (pth.concat("/",scandir,"/"));
 				if (srcpath.query_exists() == false) { srcpath.make_directory_with_parents(); }
@@ -794,15 +894,15 @@ public class hnwin : Gtk.ApplicationWindow {
 									string fff = "./".concat(scandir,"/", nm);
 									File og = File.new_for_path(fff);
 									fileentry.text = fff;
-									allknodes[selectednode].lod = fff;
-									allknodes[selectednode].lex = extname(exts[1]);
-									allknodes[selectednode].src = "cat %s".printf(fff);
-									allknodes[selectednode].cex = "sh";
-									allknodes[selectednode].rex = allknodes[selectednode].lex;
+									allknodes[sidx].lod = fff;
+									allknodes[sidx].lex = extname(exts[1]);
+									allknodes[sidx].src = "cat %s".printf(fff);
+									allknodes[sidx].cex = "sh";
+									allknodes[sidx].rex = allknodes[sidx].lex;
 									try {
 										uint8[] c; string e;
 										og.load_contents (null, out c, out e);
-										allknodes[selectednode].res = ((string) c);
+										allknodes[sidx].res = ((string) c);
 										fess = ".xx { background: #00FF0020; }";
 										fesp.load_from_data(fess.data);
 									} catch (Error e) {
@@ -830,7 +930,7 @@ public class hnwin : Gtk.ApplicationWindow {
 
 		print("building node preset box...\n");
 		Gtk.Box presetbox = new Gtk.Box(HORIZONTAL,5);
-		Gtk.Entry presetentry = new Gtk.Entry();
+		presetentry = new Gtk.Entry();
 		presetentry.hexpand = true;
 		Gtk.MenuButton presetbutton = new Gtk.MenuButton();
 		presetbutton.icon_name = "document-open-symbolic";
@@ -843,21 +943,22 @@ public class hnwin : Gtk.ApplicationWindow {
 				if (prepth.query_exists() == false) { prepth.make_directory_with_parents(); }
 				bool allgood = true;
 				if (prepth.query_exists() == false) { allgood = false; print("error: couldn't make presets dir...\n"); }
+				int sidx = getselectednode(selectednode);
 				if (allgood) {
 					string lll = "sh";
-					allknodes[selectednode].cex = ((StringObject?) oplist.selected_item).string;
-					print("selected preset type is: %s\n", allknodes[selectednode].cex);
-					lll = exttype(allknodes[selectednode].cex);
+					allknodes[sidx].cex = ((StringObject?) oplist.selected_item).string;
+					print("selected preset type is: %s\n", allknodes[sidx].cex);
+					lll = exttype(allknodes[sidx].cex);
 					string nm = presetentry.text.strip().replace(" ","_");
 					string nme = nm.concat(".",lll);
 					string fff = Path.build_filename ("./presets/",nme);
-					allknodes[selectednode].pre = fff;
+					allknodes[sidx].pre = fff;
 					File ooo = File.new_for_path(fff);
 					FileOutputStream sss = ooo.replace(null, false, FileCreateFlags.PRIVATE);
 					try {
-						sss.write(allknodes[selectednode].src.data);
+						sss.write(allknodes[sidx].src.data);
 					} catch (Error e) { print("failed to write preset: %s\n",e.message); }
-				} else { allknodes[selectednode].pre = ""; }
+				} else { allknodes[sidx].pre = ""; }
 			}
 		});
 		Gtk.Popover presetpop = new Gtk.Popover();
@@ -883,9 +984,10 @@ public class hnwin : Gtk.ApplicationWindow {
 				while (presetpopbox.get_first_child() != null) {
 					presetpopbox.remove(presetpopbox.get_first_child());
 				}
-				allknodes[selectednode].cex = ((StringObject?) oplist.selected_item).string;
-				print("selected preset type is: %s\n", allknodes[selectednode].cex);
-				string presetext = exttype(allknodes[selectednode].cex);
+				int sidx = getselectednode(selectednode);
+				allknodes[sidx].cex = ((StringObject?) oplist.selected_item).string;
+				print("selected preset type is: %s\n", allknodes[sidx].cex);
+				string presetext = exttype(allknodes[sidx].cex);
 				var pth = GLib.Environment.get_current_dir();
 				var prepth = File.new_for_path (pth.concat("/presets/"));
 				if (prepth.query_exists() == false) { prepth.make_directory_with_parents(); }
@@ -918,8 +1020,8 @@ public class hnwin : Gtk.ApplicationWindow {
 										uint8[] c; string e;
 										og.load_contents (null, out c, out e);
 										srctext.buffer.text = (string) c;
-										allknodes[selectednode].src = ((string) c);
-										allknodes[selectednode].pre = fff;
+										allknodes[sidx].src = ((string) c);
+										allknodes[sidx].pre = fff;
 									} catch (Error e) {
 										print ("failed to read %s: %s\n", og.get_path(), e.message);
 									}
@@ -943,6 +1045,7 @@ public class hnwin : Gtk.ApplicationWindow {
 		presetbox.margin_bottom = 10;
 
 // assemble node params
+
 		print("building node param container...\n");
 		Gtk.Box parambox = new Gtk.Box(VERTICAL,10);
 		parambox.append(headbox);
@@ -952,6 +1055,7 @@ public class hnwin : Gtk.ApplicationWindow {
 		paramscroll.set_child(parambox);
 		paramscrollbox.append(paramscroll);
 		paramscrollbox.vexpand = true;
+		paramscrollbox.margin_bottom = 10;
 
 // the node list
 
@@ -1018,7 +1122,8 @@ public class hnwin : Gtk.ApplicationWindow {
 			if (doup) {
 				doup = false;
 				if (srctext.buffer.text != null) {
-					allknodes[selectednode].src = srctext.buffer.text;
+					int sidx = getselectednode(selectednode);
+					allknodes[sidx].src = srctext.buffer.text;
 				}
 				doup = true;
 			}
@@ -1330,7 +1435,6 @@ public class hnwin : Gtk.ApplicationWindow {
 		Gtk.Paned vdiv = new Gtk.Paned(VERTICAL);
 		vdiv.start_child = viewswishbox;
 		vdiv.end_child = hdiv;
-		vdiv.position = 600;
 		vdiv.wide_handle = true;
 		vdiv.set_shrink_end_child(false);
 
@@ -1342,6 +1446,7 @@ public class hnwin : Gtk.ApplicationWindow {
 // add to window
 
 		this.set_child(vdiv);
+		vdiv.position = 600;
 
 // style
 
@@ -1355,12 +1460,16 @@ public class hnwin : Gtk.ApplicationWindow {
 
 // paned
 
-		Gtk.CssProvider pcsp = new Gtk.CssProvider();
-		string pcss = ".wide { min-width: 20px; min-height: 20px; border-width: 4px; border-color: %s; border-style: solid; background: %s;}".printf(sbshade, sbshade);
-		pcsp.load_from_data(pcss.data);
-		sep.get_style_context().add_provider(pcsp, Gtk.STYLE_PROVIDER_PRIORITY_USER);	
+		Gtk.CssProvider sepcsp = new Gtk.CssProvider();
+		string sepcss = ".wide { min-width: 20px; min-height: 20px; border-width: 4px; border-color: %s; border-style: solid; background: %s;}".printf(sbshade, sbshade);
+		sepcsp.load_from_data(sepcss.data);
+		sep.get_style_context().add_provider(sepcsp, Gtk.STYLE_PROVIDER_PRIORITY_USER);	
 		sep.get_style_context().add_class("wide");
-		hsep.get_style_context().add_provider(pcsp, Gtk.STYLE_PROVIDER_PRIORITY_USER);	
+
+		Gtk.CssProvider hsepcsp = new Gtk.CssProvider();
+		string hsepcss = ".wide { min-width: 0px; min-height: 20px; border-width: 0px; border-color: %s; border-style: solid; background: %s;}".printf(sbshade, sbshade);
+		hsepcsp.load_from_data(hsepcss.data);
+		hsep.get_style_context().add_provider(hsepcsp, Gtk.STYLE_PROVIDER_PRIORITY_USER);		
 		hsep.get_style_context().add_class("wide");
 
 // window
@@ -1388,7 +1497,7 @@ public class hnwin : Gtk.ApplicationWindow {
 // header bar
 
 		Gtk.CssProvider hedcsp = new Gtk.CssProvider();
-		string hedcss = ".xx { border-radius: 0; border-color: %s; background: %s; color: %s; }".printf(sblines,sbshade,sblight);
+		string hedcss = ".xx { border-radius: 0; border-color: %s; background: %s; color: %s; }".printf(sblines,sbshade,sbselect);
 		hedcsp.load_from_data(hedcss.data);
 		tbar.get_style_context().add_provider(hedcsp, Gtk.STYLE_PROVIDER_PRIORITY_USER);
 		tbar.get_style_context().add_class("xx");
@@ -1552,9 +1661,24 @@ public class hnwin : Gtk.ApplicationWindow {
 		int64 mm = GLib.get_real_time () / 1000;
 		mm = mm + ee.nom.hash();
 		ee.idx = mm.to_string();
-		print("node hash is: %s\n",ee.idx);
 		allknodes += ee;
-		selectednode = 0;
+
+		knode gg = knode();
+		gg.nom = "script parser";
+		gg.typ = "Script";
+		gg.frz = false;
+		gg.hoi = true;
+		gg.cex = "rebol";
+		gg.src = "REBOL []\n;script goes here...";
+		gg.pox = 30.0;
+		gg.poy = 50.0;
+		mm = GLib.get_real_time () / 1000;
+		mm = mm + gg.nom.hash();
+		gg.idx = mm.to_string();
+		allknodes += gg;
+
+		selectednode = ee.idx;
+		nodegraph.queue_draw();
 		doup = true;
 
 // events
@@ -1573,6 +1697,8 @@ public class hnwin : Gtk.ApplicationWindow {
 							hdiv.set_orientation(VERTICAL);
 							vdiv.position = (wx - 400);
 							hdiv.position = 300;
+							hsepcss = ".wide { min-width: 20px; min-height: 20px; border-width: 4px; border-color: %s; border-style: solid; background: %s;}".printf(sbshade, sbshade);
+							hsepcsp.load_from_data(hsepcss.data);
 							viewstack.remove(nodegraph);
 							viewstack.remove(nodelist);
 							nodestack.add_titled(nodelist,"list","list");
@@ -1602,8 +1728,10 @@ public class hnwin : Gtk.ApplicationWindow {
 							amphone = true; amdesktop = false;
 							vdiv.set_orientation(VERTICAL);
 							hdiv.set_orientation(HORIZONTAL);
-							vdiv.position = (wy - 60);
+							vdiv.position = (wy - 65);
 							hdiv.position = 0;
+							hsepcss = ".wide { min-width: 0px; min-height: 20px; border-width: 0px; border-color: %s; border-style: solid; background: %s;}".printf(sbshade, sbshade);
+							hsepcsp.load_from_data(hsepcss.data);
 							nodestack.remove(nodelist);
 							nodestack.remove(nodegraph);
 							viewstack.add_titled(nodelist,"list","list");
@@ -1630,6 +1758,246 @@ public class hnwin : Gtk.ApplicationWindow {
 			}		
 		});
 
+// graph interaction
+
+		Gtk.GestureDrag ng_touchpan = new Gtk.GestureDrag();
+		Gtk.EventControllerScroll ng_wheeler = new Gtk.EventControllerScroll(VERTICAL);
+		Gtk.EventControllerMotion ng_hover = new Gtk.EventControllerMotion();
+		ng_touchpan.set_button(0);
+		nodegraph.add_controller(ng_touchpan);
+		nodegraph.add_controller(ng_wheeler);
+		nodegraph.add_controller(ng_hover);
+
+		ng_touchpan.drag_begin.connect ((event, x, y) => {
+			if (drwm == 0) {
+				ipik = (event.get_current_button() == 1);
+				izom = (event.get_current_button() == 3);
+				ipan = (event.get_current_button() == 2);
+				ng_mdwn = {x, y};
+				if (ipik) {
+					ng_olmd = {ng_mdwn[0], ng_mdwn[1]};
+					ng_trgx = ng_mdwn[0];
+					ng_trgy = ng_mdwn[1];
+					nodegraph.queue_draw();
+				}
+			}
+		});
+		ng_touchpan.drag_update.connect((event, x, y) => {
+			if (drwm == 0) {
+				//ipik = false;
+				if (izom == false && ipan == false && ipik == false) { ng_mdwn = {x, y}; }
+				ng_moom = {x, y};
+				if (izom || ipan) { nodegraph.queue_draw(); }
+				if (event.get_current_button() == 1 && ng_node >= 0) { igrb = true; nodegraph.queue_draw(); }
+			}
+		});
+		ng_hover.motion.connect ((event, x, y) => {
+			if (drwm == 0) {
+				if (izom == false && ipan == false && ipik == false && igrb == false) { ng_mdwn = {x, y}; }
+			}
+		});
+		ng_touchpan.drag_end.connect(() => {
+			if (drwm == 0) { 
+				ipan = false;
+				izom = false;
+				iscr = false;
+				if (ipik) { nodegraph.queue_draw(); }
+				ng_olsz = {ng_sizx, ng_sizy};
+				ng_olof = {ng_posx, ng_posy};
+				ng_olmd = {ng_trgx, ng_trgy};
+				ng_olbh = ng_barh;
+				//print("current node list index is: %d\n", ng_node);
+				if (igrb) { allknodes[ng_node].pox = ng_nox; allknodes[ng_node].poy = ng_noy; igrb = false; }
+			}
+			if (dosel) { selectnode(selectednode); dosel = false; }
+			//ng_node = -1;
+		});
+		ng_wheeler.scroll.connect ((x,y) => {
+			if (drwm == 0) {
+				iscr = true;
+				ng_moom = {(-y * 50.0), (-y * 50.0)};
+				nodegraph.queue_draw();
+			}
+		});
+
+///////////////////////////////
+//                           //
+//    node graph rendering   //
+//                           //
+///////////////////////////////
+
+		nodegraph.set_draw_func((da, ctx, daw, dah) => {
+			//print("\nnodegraph.draw: started...\n");
+				var presel = selectednode;
+				var csx = nodegraph.get_allocated_width();
+				var csy = nodegraph.get_allocated_height();
+
+// graph coords
+
+				ng_sizx = ng_olsz[0];
+				ng_sizy = ng_olsz[1];
+				if (izom || iscr) {
+					ng_sizx = (ng_olsz[0] + ng_moom[0]);
+					ng_sizy = (ng_olsz[1] + ng_moom[1]);
+				}
+				ng_posx = ng_olof[0];
+				ng_posy = ng_olof[1];
+				if (izom || iscr) {
+					ng_posx = ng_olof[0] + ( (ng_mdwn[0] - ng_olof[0]) - ( (ng_mdwn[0] - ng_olof[0]) * (ng_sizx / ng_olsz[0]) ) ) ;
+					ng_posy = ng_olof[1] + ( (ng_mdwn[1] - ng_olof[1]) - ( (ng_mdwn[1] - ng_olof[1]) * (ng_sizx / ng_olsz[0]) ) ) ;
+					ng_trgx = ng_olmd[0] + ( (ng_mdwn[0] - ng_olmd[0]) - ( (ng_mdwn[0] - ng_olmd[0]) * (ng_sizx / ng_olsz[0]) ) ) ;
+					ng_trgy = ng_olmd[1] + ( (ng_mdwn[1] - ng_olmd[1]) - ( (ng_mdwn[1] - ng_olmd[1]) * (ng_sizy / ng_olsz[1]) ) ) ;
+				}
+				if(ipan) {
+					ng_posx = ng_olof[0] + ng_moom[0];
+					ng_posy = ng_olof[1] + ng_moom[1];
+					ng_trgx = ng_olmd[0] + ng_moom[0];
+					ng_trgy = ng_olmd[1] + ng_moom[1];
+				}
+				if (ipik) {
+					ng_trgx = ng_mdwn[0];
+					ng_trgy = ng_mdwn[1];
+				}
+
+// graph margins, not used for now
+
+				//var margx = 40.0;
+				//var margy = 40.0;
+
+// node height
+
+				ng_barh = ng_sizy / 5.0;
+
+// paint bg
+
+				var bc = Gdk.RGBA();
+				bc.parse(sbshade);
+				ctx.set_source_rgba(bc.red,bc.green,bc.blue,1);
+				ctx.paint();
+
+
+// position vars
+
+				var xx = 0.0;	// node width
+				var py = 0.0;	// node pos x
+				var px = 0.0;	// node pos y
+				var gxx = 0.0;	// node text pos x
+				var sfc = ng_sizx / 200.0;
+				ng_nox = 0.0;
+				ng_noy = 0.0;
+
+// offset if dragging
+
+				if (igrb) {
+					for (int i = 0; i < allknodes.length; i++) {
+						if (i == ng_node) {
+							ng_nox = allknodes[i].pox + ng_moom[0];
+							ng_noy = allknodes[i].poy + ng_moom[1];
+							break;
+						}
+					}
+				}
+
+// text extents
+				Cairo.TextExtents extents;
+				var maxtents = 1.0;
+				for (int i = 0; i < allknodes.length; i++) {
+					ctx.text_extents (allknodes[i].nom, out extents);
+					if (extents.width > maxtents) { maxtents = extents.width; }
+				}
+
+// check selection hit
+
+				if (ipik && ng_mdwn[0] > 0 && izom == false && ipan == false && iscr == false && igrb == false) {
+					ng_node = -1;
+					for (int i = 0; i < allknodes.length; i++) {
+						px = allknodes[i].pox;
+						py = allknodes[i].poy;
+						xx = 200 * sfc;
+						px = px + ng_posx;
+						py = py + ng_posy;
+						//py = i * ng_barh;
+						if (ng_mdwn[0] > px && ng_mdwn[0] < (px + xx)) {
+							if (ng_mdwn[1] > py && ng_mdwn[1] < (py + (ng_barh - 1))) {
+								print("selection hit on %d\n", i);
+								selectednode = allknodes[i].idx;
+								ng_node = i;
+								ng_trgx = ng_mdwn[0]; ng_trgy = ng_mdwn[1];
+								break;
+							}
+						}
+					}
+				}
+
+// draw node box
+
+				for (int i = 0; i < allknodes.length; i++) {
+					px = allknodes[i].pox;
+					py = allknodes[i].poy;
+					if (igrb) {
+						if (i == ng_node) {
+							px = ng_nox;
+							py = ng_noy;
+						}
+					}
+					xx = 200.0 * sfc;
+					px = px + ng_posx;
+					py = py + ng_posy;
+					//py = i * ng_barh;	// initial pos for list, disable for nodegraph
+					bc.parse(sbselect);
+					if (allknodes[i].col != null) {
+						if (allknodes[i].col != "") {
+							bc.parse(allknodes[i].col);
+						}
+					}
+					ctx.set_source_rgba(bc.red,bc.green,bc.blue,((float) 0.9));
+					ctx.rectangle(px, py, xx, (ng_barh - 1));
+					ctx.fill ();
+					if (ng_node == i) {
+						bc.red = ((float) 1.0); bc.green = ((float) 1.0); bc.blue = ((float) 1.0);
+						ctx.set_source_rgba(bc.red,bc.green,bc.blue,((float) 0.5));
+						ctx.rectangle(px, py, xx, (ng_barh - 1));
+						ctx.fill();
+						ctx.set_source_rgba(bc.red,bc.green,bc.blue,((float) 0.9));
+						ctx.rectangle(px+1, py+1, xx-2, (ng_barh - 3));
+						ctx.set_line_width(2);
+						ctx.stroke();
+					}
+
+// draw text
+					string xinf = allknodes[i].nom;
+					bc.parse(sblines);
+					ctx.set_font_size(double.min(ng_barh, 30.0)); 
+					ctx.text_extents (allknodes[i].nom, out extents);
+					gxx = px + maxtents;
+					ctx.set_source_rgba(bc.red,bc.green,bc.blue,((float) 0.5));
+					ctx.move_to((px + 5.0), (py + extents.height + (ng_barh * 0.1)));
+					ctx.show_text(xinf);
+				}
+
+// new rule selection detected, update the rest of the ui
+
+				if (selectednode != "none" && selectednode != presel) {
+					dosel = true;
+				}
+
+// reset mouseown if not doing anythting with it
+
+				if (izom == false && ipan == false && iscr == false && igrb == false) {
+					ng_mdwn[0] = 0;
+					ng_mdwn[1] = 0;
+					ipik = false;
+				}
+
+// there's no wheel_end event so these go here... its a pulse event so works ok
+
+				if (iscr) { 
+					iscr = false;
+					ng_olsz = {ng_sizx, ng_sizy};
+					ng_olof = {ng_posx, ng_posy};
+					ng_olmd = {ng_trgx, ng_trgy};
+				}
+		});
 	}
 }
 
