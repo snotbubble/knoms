@@ -76,8 +76,8 @@
 // ? = needs research (brute-force trial & error)
 // dones are removed, unless something depends on it
 //
+// - [!] fix busted node offset after moving it in a scaled/offset coordsys
 // - [!] finish reflow of params
-// - [!] fix node scale issues
 // - [ ] make sb color theme for gtksourceview
 // - [ ] beastmode layout: 2x vertical paned, output in left, editor in middle, node and params in right horizontal paned
 // - [ ] node text scale
@@ -1856,7 +1856,7 @@ public class hnwin : Gtk.ApplicationWindow {
 				if (izom == false && ipan == false && ipik == false) { ng_mdwn = {x, y}; }
 				ng_moom = {x, y};
 				if (izom || ipan) { nodegraph.queue_draw(); }
-				//if (event.get_current_button() == 1 && ng_node >= 0) { igrb = true; nodegraph.queue_draw(); }
+				if (event.get_current_button() == 1 && ng_node >= 0) { igrb = true; nodegraph.queue_draw(); }
 			}
 		});
 		ng_hover.motion.connect ((event, x, y) => {
@@ -1868,15 +1868,18 @@ public class hnwin : Gtk.ApplicationWindow {
 			ipan = false;
 			izom = false;
 			iscr = false;
-			igrb = false;
+			//igrb = false;
 			if (drwm == 0) { 
 				if (ipik) { nodegraph.queue_draw(); }
 				ng_olsz = {ng_sizx, ng_sizy};
 				ng_olof = {ng_posx, ng_posy};
 				ng_olmd = {ng_trgx, ng_trgy};
 				ng_olbh = ng_barh;
-				//print("current node list index is: %d\n", ng_node);
-				//if (igrb) { allknodes[ng_node].pox = ng_nox; allknodes[ng_node].poy = ng_noy; igrb = false; }
+				if (igrb) { 
+					allknodes[ng_node].pox = ng_nox;
+					allknodes[ng_node].poy = ng_noy;
+					igrb = false;
+				}
 			}
 			if (dosel) { selectnode(selectednode); dosel = false; }
 			//ng_node = -1;
@@ -1936,25 +1939,15 @@ public class hnwin : Gtk.ApplicationWindow {
 					ng_trgy = ng_mdwn[1];
 				}
 
-				print("nodegraph.set_draw_func:\tsizx : %f\n", ng_sizx); 
-				print("nodegraph.set_draw_func:\tsizy : %f\n", ng_sizy); 
-				print("nodegraph.set_draw_func:\tposx : %f\n", ng_posx); 
-				print("nodegraph.set_draw_func:\tposy : %f\n", ng_posy);
-				print("nodegraph.set_draw_func:\ttrgx : %f\n", ng_trgx); 
-				print("nodegraph.set_draw_func:\ttrgy : %f\n", ng_trgy);
+				ng_nox = 0.0;
+				ng_noy = 0.0;
 
-// bar height
-
-				ctx.select_font_face("Monospace",Cairo.FontSlant.NORMAL,Cairo.FontWeight.BOLD);
-				ctx.set_font_size(double.min(ng_barh * 0.8, 30.0)); 
-				Cairo.TextExtents extents;
-				ctx.text_extents (allknodes[0].nom, out extents);
-				var xx = extents.width + 40.0;
-
-// clamp pos y
-
-				//ng_posy = double.min(double.max(ng_posy, (0 - ((ng_barh * allknodes.length)-dah))), 0.0);
-				//ng_posx = double.min(double.max(ng_posx, (daw - xx)), 0.0);
+				//print("nodegraph.set_draw_func:\tsizx : %f\n", ng_sizx); 
+				//print("nodegraph.set_draw_func:\tsizy : %f\n", ng_sizy); 
+				//print("nodegraph.set_draw_func:\tposx : %f\n", ng_posx); 
+				//print("nodegraph.set_draw_func:\tposy : %f\n", ng_posy);
+				//print("nodegraph.set_draw_func:\ttrgx : %f\n", ng_trgx); 
+				//print("nodegraph.set_draw_func:\ttrgy : %f\n", ng_trgy);
 
 // paint bg
 
@@ -1963,33 +1956,120 @@ public class hnwin : Gtk.ApplicationWindow {
 				ctx.set_source_rgba(bc.red,bc.green,bc.blue,1);
 				ctx.paint();
 
-// rows
+// vars
 
-				var gxx = 0.0;
-				var gyy = 0.0;
-				var ptx = 0.0;
-				var pty = 0.0;
-				var ptw = 0.0;
-				var pth = 0.0;
-				var rsx = (ng_sizx / ng_olsz[0]);		// relative scale x
-				var rsy = (ng_sizy / ng_olsz[1]);		// relative scale y
-				var asx = (ng_sizx / ng_ogsz[0]);		// absolute scale x
-				var asy = (ng_sizy / ng_ogsz[1]);		// absolute scale y
-					
+				var gxx = 0.0;								// text offset
+				var gyy = 0.0;								// text offset
+				double rsx = (ng_sizx / ng_olsz[0]);		// relative scale x
+				double rsy = (ng_sizy / ng_olsz[1]);		// relative scale y
+				double asx = (ng_sizx / ng_ogsz[0]);		// absolute scale x
+				double asy = (ng_sizy / ng_ogsz[1]);		// absolute scale y
+				double nx = (200.0 * asx);
+				double ny = (50.0 * asy);
+
+// text extents
+
+				ctx.select_font_face("Monospace",Cairo.FontSlant.NORMAL,Cairo.FontWeight.BOLD);
+				ctx.set_font_size(double.min((50.0 * asy), 30.0)); 
+				Cairo.TextExtents extents;
+				ctx.text_extents (allknodes[0].nom, out extents);
+
+				var maxtents = 1.0;
 				for (int i = 0; i < allknodes.length; i++) {
-					px = (allknodes[i].pox * asx) + ng_posx;
-					py = (allknodes[i].poy * asy) + ng_posy;
-					string xinf = allknodes[i].nom;
-					bc.parse(sblight);
-					ctx.set_source_rgba(bc.red,bc.green,bc.blue,((float) 1.0));
-					ctx.rectangle(px, py, (50.0 * asx), (30.0 * asy));
-					ctx.fill();
+					ctx.text_extents (allknodes[i].nom, out extents);
+					if (extents.width > maxtents) { maxtents = extents.width; }
 				}
 
+// grab node
+
+				if (igrb) {
+					for (int i = 0; i < allknodes.length; i++) {
+						if (i == ng_node) {
+							ng_nox = (allknodes[i].pox * rsx) + ng_moom[0];
+							ng_noy = (allknodes[i].poy * rsy) + ng_moom[1];
+							break;
+						}
+					}
+				}
+
+// get selection
+
+				if (ipik && izom == false && ipan == false && iscr == false && igrb == false) {
+					ng_node = -1;
+					for (int i = 0; i < allknodes.length; i++) {
+						px = (allknodes[i].pox * asx) + ng_posx;
+						py = (allknodes[i].poy * asy) + ng_posy;
+						if (ng_mdwn[0] > px && ng_mdwn[0] < (px + nx)) {
+							if (ng_mdwn[1] > py && ng_mdwn[1] < (py + ny)) {
+								selectednode = allknodes[i].idx;
+								print("new node list index is: %d\n", i);
+								ng_node = i;
+								break;
+							}
+						}
+					}
+				}
+
+				for (int i = 0; i < allknodes.length; i++) {
+
+// node position
+
+					px = (allknodes[i].pox * asx) + ng_posx;
+					py = (allknodes[i].poy * asy) + ng_posy;
+					if (igrb) { if (i == ng_node) { px = ng_nox; py = ng_noy; } }
+
+// node highlight
+
+					if (ng_node == i) {
+						bc.parse(sbselect);
+						ctx.set_source_rgba(bc.red,bc.green,bc.blue,((float) 1.0));
+						ctx.rectangle(px, py, nx, ny);
+						ctx.fill();
+
+// node border
+
+						ctx.set_source_rgba(((float) 1.0),((float) 1.0),((float) 1.0),((float) 1.0));
+						ctx.rectangle(px,py,nx,ny);
+						ctx.set_line_width(4.0);
+						ctx.stroke();
+
+// do selection?
+
+						if (selectednode != "none" && selectednode != presel) { dosel = true; }
+
+					} else {
+
+// node boxes
+
+						bc.parse(sblight);
+						ctx.set_source_rgba(bc.red,bc.green,bc.blue,((float) 1.0));
+						ctx.rectangle(px, py, nx, ny);
+						ctx.fill();
+
+// node border
+
+						bc.parse(sblines);
+						ctx.set_source_rgba(bc.red,bc.green,bc.blue,((float) 1.0));
+						ctx.rectangle(px,py,nx,ny);
+						ctx.set_line_width(4.0);
+						ctx.stroke();
+					}
+
+// node text
+
+					bc.parse(sblines);
+					ctx.set_source_rgba(bc.red,bc.green,bc.blue,((float) 1.0));
+					string xinf = allknodes[i].nom;
+					ctx.set_font_size(double.max((nx * 0.1), 4.0)); 
+					ctx.text_extents (allknodes[i].nom, out extents);
+					gxx = px + maxtents;
+					ctx.move_to((px + 5.0), (py + extents.height + (ny * 0.1)));
+					ctx.show_text(xinf);
+				}
 
 // reset mouseown if not doing anythting with it
 
-				if (izom == false && ipan == false && iscr == false) {
+				if (izom == false && ipan == false && iscr == false && igrb == false) {
 					ng_mdwn[0] = 0;
 					ng_mdwn[1] = 0;
 					ipik = false;
