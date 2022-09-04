@@ -2,6 +2,12 @@
 // knowledge management system
 // by c.p.brown 2022
 
+// long term goal is to wean myself off Houdini for admin work,
+// use of which is insane overkill (& a DRM nightmare), but I can't find anything that comes close to its speed & capability
+//
+// this probably won't be usable until 2023 as there's a massive amount of ui fuckery to sort-out 1st
+//
+//
 // short term goals
 //
 // - create a simple page/article website:
@@ -31,7 +37,7 @@
 //                                                             +-------------+
 //
 //
-// - link custom parameters, create scripted custom parameters that can use input vals:
+// - link custom parameters, create scripted custom parameters that can use input vals, save/load node parameter loadouts:
 //
 //    nodes                                                                              list
 //
@@ -708,10 +714,11 @@ public class hnwin : Gtk.ApplicationWindow {
 
 		double[] 	ng_moom = {0.0,0.0};		// graph live mousemove xy
 		double[] 	ng_mdwn = {0.0,0.0};		// graph live mousedown xy
-		double[] 	ng_olsz = {300.0,300.0};	// graph pre-draw size xy
+		double[] 	ng_ogsz = {300.0,300.0};	// graph static size xy - does not change
+		double[] 	ng_olsz = {300.0,300.0};	// graph pre-draw size xy - is changed
 		double[] 	ng_olof = {0.0,0.0};		// graph pre-draw offset xy
 		double[] 	ng_olmd = {0.0,0.0};		// graph pre-draw mousedown xy
-		double		ng_olbh = 10.0;				// graph pre-draw bar height
+		double		ng_olbh = 30.0;				// graph pre-draw bar height
 		double 		ng_posx = 0.0;				// graph post-draw offset x
 		double 		ng_posy = 0.0;				// graph post_draw offset y
 		double		ng_sizx	= 0.0;				// graph post-draw size x
@@ -1849,33 +1856,34 @@ public class hnwin : Gtk.ApplicationWindow {
 				if (izom == false && ipan == false && ipik == false) { ng_mdwn = {x, y}; }
 				ng_moom = {x, y};
 				if (izom || ipan) { nodegraph.queue_draw(); }
-				if (event.get_current_button() == 1 && ng_node >= 0) { igrb = true; nodegraph.queue_draw(); }
+				//if (event.get_current_button() == 1 && ng_node >= 0) { igrb = true; nodegraph.queue_draw(); }
 			}
 		});
 		ng_hover.motion.connect ((event, x, y) => {
 			if (drwm == 0) {
-				if (izom == false && ipan == false && ipik == false && igrb == false) { ng_mdwn = {x, y}; }
+				if (izom == false && ipan == false && ipik == false) { ng_mdwn = {x, y}; }
 			}
 		});
 		ng_touchpan.drag_end.connect(() => {
+			ipan = false;
+			izom = false;
+			iscr = false;
+			igrb = false;
 			if (drwm == 0) { 
-				ipan = false;
-				izom = false;
-				iscr = false;
 				if (ipik) { nodegraph.queue_draw(); }
 				ng_olsz = {ng_sizx, ng_sizy};
 				ng_olof = {ng_posx, ng_posy};
 				ng_olmd = {ng_trgx, ng_trgy};
 				ng_olbh = ng_barh;
 				//print("current node list index is: %d\n", ng_node);
-				if (igrb) { allknodes[ng_node].pox = ng_nox; allknodes[ng_node].poy = ng_noy; igrb = false; }
+				//if (igrb) { allknodes[ng_node].pox = ng_nox; allknodes[ng_node].poy = ng_noy; igrb = false; }
 			}
 			if (dosel) { selectnode(selectednode); dosel = false; }
 			//ng_node = -1;
 		});
 		ng_wheeler.scroll.connect ((x,y) => {
+			iscr = true;
 			if (drwm == 0) {
-				iscr = true;
 				ng_moom = {(-y * 50.0), (-y * 50.0)};
 				nodegraph.queue_draw();
 			}
@@ -1888,46 +1896,65 @@ public class hnwin : Gtk.ApplicationWindow {
 ///////////////////////////////
 
 		nodegraph.set_draw_func((da, ctx, daw, dah) => {
-			//print("\nnodegraph.draw: started...\n");
+			if (allknodes.length > 0) {
 				var presel = selectednode;
 				var csx = nodegraph.get_allocated_width();
 				var csy = nodegraph.get_allocated_height();
+				var px = 0.0;
+				var py = 0.0;
 
 // graph coords
 
 				ng_sizx = ng_olsz[0];
 				ng_sizy = ng_olsz[1];
+
 				if (izom || iscr) {
 					ng_sizx = (ng_olsz[0] + ng_moom[0]);
 					ng_sizy = (ng_olsz[1] + ng_moom[1]);
 				}
-				ng_posx = ng_olof[0];
+
 				ng_posy = ng_olof[1];
+				ng_posx = ng_olof[0];
+				
 				if (izom || iscr) {
+					ng_barh = ng_olbh * (ng_sizy / ng_olsz[1]);
 					ng_posx = ng_olof[0] + ( (ng_mdwn[0] - ng_olof[0]) - ( (ng_mdwn[0] - ng_olof[0]) * (ng_sizx / ng_olsz[0]) ) ) ;
-					ng_posy = ng_olof[1] + ( (ng_mdwn[1] - ng_olof[1]) - ( (ng_mdwn[1] - ng_olof[1]) * (ng_sizx / ng_olsz[0]) ) ) ;
+					ng_posy = ng_olof[1] + ( (ng_mdwn[1] - ng_olof[1]) - ( (ng_mdwn[1] - ng_olof[1]) * (ng_sizy / ng_olsz[1]) ) ) ;
 					ng_trgx = ng_olmd[0] + ( (ng_mdwn[0] - ng_olmd[0]) - ( (ng_mdwn[0] - ng_olmd[0]) * (ng_sizx / ng_olsz[0]) ) ) ;
 					ng_trgy = ng_olmd[1] + ( (ng_mdwn[1] - ng_olmd[1]) - ( (ng_mdwn[1] - ng_olmd[1]) * (ng_sizy / ng_olsz[1]) ) ) ;
 				}
+
 				if(ipan) {
 					ng_posx = ng_olof[0] + ng_moom[0];
 					ng_posy = ng_olof[1] + ng_moom[1];
 					ng_trgx = ng_olmd[0] + ng_moom[0];
 					ng_trgy = ng_olmd[1] + ng_moom[1];
 				}
+	
 				if (ipik) {
 					ng_trgx = ng_mdwn[0];
 					ng_trgy = ng_mdwn[1];
 				}
 
-// graph margins, not used for now
+				print("nodegraph.set_draw_func:\tsizx : %f\n", ng_sizx); 
+				print("nodegraph.set_draw_func:\tsizy : %f\n", ng_sizy); 
+				print("nodegraph.set_draw_func:\tposx : %f\n", ng_posx); 
+				print("nodegraph.set_draw_func:\tposy : %f\n", ng_posy);
+				print("nodegraph.set_draw_func:\ttrgx : %f\n", ng_trgx); 
+				print("nodegraph.set_draw_func:\ttrgy : %f\n", ng_trgy);
 
-				//var margx = 40.0;
-				//var margy = 40.0;
+// bar height
 
-// node height
+				ctx.select_font_face("Monospace",Cairo.FontSlant.NORMAL,Cairo.FontWeight.BOLD);
+				ctx.set_font_size(double.min(ng_barh * 0.8, 30.0)); 
+				Cairo.TextExtents extents;
+				ctx.text_extents (allknodes[0].nom, out extents);
+				var xx = extents.width + 40.0;
 
-				ng_barh = ng_sizy / 5.0;
+// clamp pos y
+
+				//ng_posy = double.min(double.max(ng_posy, (0 - ((ng_barh * allknodes.length)-dah))), 0.0);
+				//ng_posx = double.min(double.max(ng_posx, (daw - xx)), 0.0);
 
 // paint bg
 
@@ -1936,128 +1963,47 @@ public class hnwin : Gtk.ApplicationWindow {
 				ctx.set_source_rgba(bc.red,bc.green,bc.blue,1);
 				ctx.paint();
 
+// rows
 
-// position vars
-
-				var xx = 0.0;	// node width
-				var py = 0.0;	// node pos x
-				var px = 0.0;	// node pos y
-				var gxx = 0.0;	// node text pos x
-				var sfc = ng_sizx / 200.0;
-				ng_nox = 0.0;
-				ng_noy = 0.0;
-
-// offset if dragging
-
-				if (igrb) {
-					for (int i = 0; i < allknodes.length; i++) {
-						if (i == ng_node) {
-							ng_nox = allknodes[i].pox + ng_moom[0];
-							ng_noy = allknodes[i].poy + ng_moom[1];
-							break;
-						}
-					}
-				}
-
-// text extents
-				Cairo.TextExtents extents;
-				var maxtents = 1.0;
+				var gxx = 0.0;
+				var gyy = 0.0;
+				var ptx = 0.0;
+				var pty = 0.0;
+				var ptw = 0.0;
+				var pth = 0.0;
+				var rsx = (ng_sizx / ng_olsz[0]);		// relative scale x
+				var rsy = (ng_sizy / ng_olsz[1]);		// relative scale y
+				var asx = (ng_sizx / ng_ogsz[0]);		// absolute scale x
+				var asy = (ng_sizy / ng_ogsz[1]);		// absolute scale y
+					
 				for (int i = 0; i < allknodes.length; i++) {
-					ctx.text_extents (allknodes[i].nom, out extents);
-					if (extents.width > maxtents) { maxtents = extents.width; }
-				}
-
-// check selection hit
-
-				if (ipik && ng_mdwn[0] > 0 && izom == false && ipan == false && iscr == false && igrb == false) {
-					ng_node = -1;
-					for (int i = 0; i < allknodes.length; i++) {
-						px = allknodes[i].pox;
-						py = allknodes[i].poy;
-						xx = 200 * sfc;
-						px = px + ng_posx;
-						py = py + ng_posy;
-						//py = i * ng_barh;
-						if (ng_mdwn[0] > px && ng_mdwn[0] < (px + xx)) {
-							if (ng_mdwn[1] > py && ng_mdwn[1] < (py + (ng_barh - 1))) {
-								print("selection hit on %d\n", i);
-								selectednode = allknodes[i].idx;
-								ng_node = i;
-								ng_trgx = ng_mdwn[0]; ng_trgy = ng_mdwn[1];
-								break;
-							}
-						}
-					}
-				}
-
-// draw node box
-
-				for (int i = 0; i < allknodes.length; i++) {
-					px = allknodes[i].pox;
-					py = allknodes[i].poy;
-					if (igrb) {
-						if (i == ng_node) {
-							px = ng_nox;
-							py = ng_noy;
-						}
-					}
-					xx = 200.0 * sfc;
-					px = px + ng_posx;
-					py = py + ng_posy;
-					//py = i * ng_barh;	// initial pos for list, disable for nodegraph
-					bc.parse(sbselect);
-					if (allknodes[i].col != null) {
-						if (allknodes[i].col != "") {
-							bc.parse(allknodes[i].col);
-						}
-					}
-					ctx.set_source_rgba(bc.red,bc.green,bc.blue,((float) 0.9));
-					ctx.rectangle(px, py, xx, (ng_barh - 1));
-					ctx.fill ();
-					if (ng_node == i) {
-						bc.red = ((float) 1.0); bc.green = ((float) 1.0); bc.blue = ((float) 1.0);
-						ctx.set_source_rgba(bc.red,bc.green,bc.blue,((float) 0.5));
-						ctx.rectangle(px, py, xx, (ng_barh - 1));
-						ctx.fill();
-						ctx.set_source_rgba(bc.red,bc.green,bc.blue,((float) 0.9));
-						ctx.rectangle(px+1, py+1, xx-2, (ng_barh - 3));
-						ctx.set_line_width(2);
-						ctx.stroke();
-					}
-
-// draw text
+					px = (allknodes[i].pox * asx) + ng_posx;
+					py = (allknodes[i].poy * asy) + ng_posy;
 					string xinf = allknodes[i].nom;
-					bc.parse(sblines);
-					ctx.set_font_size(double.min(ng_barh, 30.0)); 
-					ctx.text_extents (allknodes[i].nom, out extents);
-					gxx = px + maxtents;
-					ctx.set_source_rgba(bc.red,bc.green,bc.blue,((float) 0.5));
-					ctx.move_to((px + 5.0), (py + extents.height + (ng_barh * 0.1)));
-					ctx.show_text(xinf);
+					bc.parse(sblight);
+					ctx.set_source_rgba(bc.red,bc.green,bc.blue,((float) 1.0));
+					ctx.rectangle(px, py, (50.0 * asx), (30.0 * asy));
+					ctx.fill();
 				}
 
-// new rule selection detected, update the rest of the ui
-
-				if (selectednode != "none" && selectednode != presel) {
-					dosel = true;
-				}
 
 // reset mouseown if not doing anythting with it
 
-				if (izom == false && ipan == false && iscr == false && igrb == false) {
+				if (izom == false && ipan == false && iscr == false) {
 					ng_mdwn[0] = 0;
 					ng_mdwn[1] = 0;
 					ipik = false;
 				}
 
-// there's no wheel_end event so these go here... its a pulse event so works ok
+// wheel has no end event, so have to terminate it here
 
-				if (iscr) { 
+				if (iscr) {
 					iscr = false;
 					ng_olsz = {ng_sizx, ng_sizy};
 					ng_olof = {ng_posx, ng_posy};
 					ng_olmd = {ng_trgx, ng_trgy};
 				}
+			}
 		});
 	}
 }
