@@ -518,7 +518,7 @@ public class hnwin : Gtk.ApplicationWindow {
 	private Gtk.ToggleButton freezebutton;
 	private Gtk.Entry fileentry;
 	private Gtk.Entry presetentry;
-	private GtkSource.View srctext;
+	private Gtk.TextView srctext;
 	private string extname (string e) {
 		string o = "html";
 		switch (e) {
@@ -776,7 +776,7 @@ public class hnwin : Gtk.ApplicationWindow {
 		});
 
 		oplist = new Gtk.DropDown(null,null);
-		oplist.set_model(new Gtk.StringList({"Load", "Save", "Merge", "ForEach", "Switch", "Sequence", "Join", "Script"}));
+		oplist.set_model(new Gtk.StringList({"Load", "Save", "Merge", "Split", "Join", "Splice", "Switch", "Group", "Sort", "Replace", "Text", "Script"}));
 		oplist.set_selected(0);
 		oplist.notify["selected"].connect(() => {
 			if (doup) {
@@ -1133,6 +1133,8 @@ public class hnwin : Gtk.ApplicationWindow {
 // the node graph
 
 		Gtk.DrawingArea nodegraph = new Gtk.DrawingArea();
+		nodegraph.vexpand = true;
+		nodegraph.hexpand = true;
 
 // swishbox for: node graph, node list
 
@@ -1177,15 +1179,21 @@ public class hnwin : Gtk.ApplicationWindow {
 		Gtk.Box srcscrollbox = new Gtk.Box(VERTICAL,10);
 		Gtk.ScrolledWindow srcscroll = new Gtk.ScrolledWindow();
 		srcscroll.height_request = 200;
-		Gtk.TextTagTable srctextbufftags = new Gtk.TextTagTable();
-		GtkSource.Buffer srctextbuff = new GtkSource.Buffer(srctextbufftags);
-		srctext = new GtkSource.View.with_buffer(srctextbuff);
-		srctextbuff.set_style_scheme(GtkSource.StyleSchemeManager.get_default().get_scheme("Adwaita-dark"));
-		srctextbuff.set_language(GtkSource.LanguageManager.get_default().get_language("html"));
+		srctext = new Gtk.TextView();
 		srctext.accepts_tab = true;
-		srctext.set_monospace(true);
-
-		srctextbuff.set_highlight_syntax(true);	
+		srctext.set_monospace(true);	
+		var pgcx = srctext.get_pango_context();
+		int tabw = pgcx.get_metrics(pgcx.get_font_description(), pgcx.get_language()).get_approximate_digit_width();
+		tabw = ((int) (Pango.units_to_double(tabw) * 4.0)) + 1;
+		Pango.TabArray taba = new Pango.TabArray(1, true);
+		taba.set_tab(0, LEFT, tabw);
+		srctext.set_tabs(taba);
+		srctext.buffer.set_text("some source\n\tgoes\n\there\n1234\0",-1);
+		srctext.vexpand = true;
+		srctext.top_margin =		10;
+		srctext.left_margin =		10;
+		srctext.right_margin =		10;
+		srctext.bottom_margin =		10;	
 		srctext.buffer.changed.connect(() => {
 			if (doup) {
 				doup = false;
@@ -1196,21 +1204,6 @@ public class hnwin : Gtk.ApplicationWindow {
 				doup = true;
 			}
 		});	
-
-		srctext.tab_width = 2;
-		srctext.indent_on_tab = true;
-		srctext.indent_width = 2;
-		srctext.show_line_numbers = true;
-		srctext.highlight_current_line = true;
-		srctext.vexpand = true;
-		srctext.top_margin = 10;
-		srctext.left_margin = 10;
-		srctext.right_margin = 10;
-		srctext.bottom_margin = 10;
-		srctext.space_drawer.enable_matrix = true;
-
-		srctext.opacity = 1.0;
-
 		srcscroll.set_child(srctext);
 		srcscrollbox.append(srcscroll);
 		srcscrollbox.vexpand = true;
@@ -1562,6 +1555,14 @@ public class hnwin : Gtk.ApplicationWindow {
 		presetentry.get_style_context().add_provider(entcsp, Gtk.STYLE_PROVIDER_PRIORITY_USER);	
 		presetentry.get_style_context().add_class("xx");
 
+// textview fields
+
+		Gtk.CssProvider txtcsp = new Gtk.CssProvider();
+		string txtcss = ".xx { border-radius: 0; border-color: %s; background: %s; color: %s; }".printf(sblines,sblines,sbselect);
+		txtcsp.load_from_data(txtcss.data);
+		srctext.get_style_context().add_provider(txtcsp, Gtk.STYLE_PROVIDER_PRIORITY_USER);	
+		srctext.get_style_context().add_class("xx");
+
 // header bar
 
 		Gtk.CssProvider hedcsp = new Gtk.CssProvider();
@@ -1737,7 +1738,7 @@ public class hnwin : Gtk.ApplicationWindow {
 		gg.frz = false;
 		gg.hoi = true;
 		gg.cex = "rebol";
-		gg.src = "REBOL []\n;script goes here...";
+		gg.src = "script node\nto use rebol start it with: REBOL [\nto use python start with an import, def or #!usr/bin/python\nto use shell start with:  #!bin/bash\nto get the input node output with rebol use: lines: read/lines to-file system/script/args\nto get input with python use: lines = open(sys.argv[1], 'r').readlines()\nto get input with sh use:\nreadarray -t lines < $1\nfor l in \"${lines[@]}\"; do\n\techo \"$l\"\ndone\n\nto make parameters use:\n;@[fieldname;fieldval;minval;maxval]\nwhere ';' is the escape char for the language (use '`' for text)\nexample (rebol):\n\tperc: ;@[percent;10.0;0.0;100.0]\nthis will replace the field with the parameter value whenever the code is evaluated";
 		gg.pox = 30.0;
 		gg.poy = 50.0;
 		mm = GLib.get_real_time () / 1000;
@@ -1861,32 +1862,38 @@ public class hnwin : Gtk.ApplicationWindow {
 		});
 		ng_hover.motion.connect ((event, x, y) => {
 			if (drwm == 0) {
-				if (izom == false && ipan == false && ipik == false) { ng_mdwn = {x, y}; }
+				if (izom == false && ipan == false && ipik == false && igrb == false) { ng_mdwn = {x, y}; }
 			}
 		});
 		ng_touchpan.drag_end.connect(() => {
-			ipan = false;
-			izom = false;
-			iscr = false;
-			//igrb = false;
 			if (drwm == 0) { 
-				if (ipik) { nodegraph.queue_draw(); }
+				ipan = false;
+				izom = false;
+				iscr = false;
+				//if (ipik) { nodegraph.queue_draw(); }
+				if (igrb && ng_node >= 0) {
+					allknodes[ng_node].pox = ng_nox;
+					allknodes[ng_node].poy = ng_noy;
+				}
+				if (ng_node >= 0) {
+					print("selected node index = %d\nselected node pox = %f\n",ng_node,ng_nox);
+				} else {
+					print("no node is selected\n");
+				}
+				igrb = false;
+				ipik = false;
 				ng_olsz = {ng_sizx, ng_sizy};
 				ng_olof = {ng_posx, ng_posy};
 				ng_olmd = {ng_trgx, ng_trgy};
 				ng_olbh = ng_barh;
-				if (igrb) { 
-					allknodes[ng_node].pox = ng_nox;
-					allknodes[ng_node].poy = ng_noy;
-					igrb = false;
-				}
+
 			}
 			if (dosel) { selectnode(selectednode); dosel = false; }
-			//ng_node = -1;
+			ng_node = -1;
 		});
 		ng_wheeler.scroll.connect ((x,y) => {
-			iscr = true;
 			if (drwm == 0) {
+				iscr = true;
 				ng_moom = {(-y * 50.0), (-y * 50.0)};
 				nodegraph.queue_draw();
 			}
@@ -1918,13 +1925,18 @@ public class hnwin : Gtk.ApplicationWindow {
 
 				ng_posy = ng_olof[1];
 				ng_posx = ng_olof[0];
+
+				double rsx = (ng_sizx / ng_olsz[0]);		// relative scale x
+				double rsy = (ng_sizy / ng_olsz[1]);		// relative scale y
+				double asx = (ng_sizx / ng_ogsz[0]);		// absolute scale x
+				double asy = (ng_sizy / ng_ogsz[1]);		// absolute scale y
 				
 				if (izom || iscr) {
 					ng_barh = ng_olbh * (ng_sizy / ng_olsz[1]);
-					ng_posx = ng_olof[0] + ( (ng_mdwn[0] - ng_olof[0]) - ( (ng_mdwn[0] - ng_olof[0]) * (ng_sizx / ng_olsz[0]) ) ) ;
-					ng_posy = ng_olof[1] + ( (ng_mdwn[1] - ng_olof[1]) - ( (ng_mdwn[1] - ng_olof[1]) * (ng_sizy / ng_olsz[1]) ) ) ;
-					ng_trgx = ng_olmd[0] + ( (ng_mdwn[0] - ng_olmd[0]) - ( (ng_mdwn[0] - ng_olmd[0]) * (ng_sizx / ng_olsz[0]) ) ) ;
-					ng_trgy = ng_olmd[1] + ( (ng_mdwn[1] - ng_olmd[1]) - ( (ng_mdwn[1] - ng_olmd[1]) * (ng_sizy / ng_olsz[1]) ) ) ;
+					ng_posx = ng_olof[0] + ( (ng_mdwn[0] - ng_olof[0]) - ( (ng_mdwn[0] - ng_olof[0]) * rsx ) ) ;
+					ng_posy = ng_olof[1] + ( (ng_mdwn[1] - ng_olof[1]) - ( (ng_mdwn[1] - ng_olof[1]) * rsy ) ) ;
+					ng_trgx = ng_olmd[0] + ( (ng_mdwn[0] - ng_olmd[0]) - ( (ng_mdwn[0] - ng_olmd[0]) * rsx ) ) ;
+					ng_trgy = ng_olmd[1] + ( (ng_mdwn[1] - ng_olmd[1]) - ( (ng_mdwn[1] - ng_olmd[1]) * rsy ) ) ;
 				}
 
 				if(ipan) {
@@ -1952,7 +1964,7 @@ public class hnwin : Gtk.ApplicationWindow {
 // paint bg
 
 				var bc = Gdk.RGBA();
-				bc.parse(sbshade);
+				bc.parse(sblines);
 				ctx.set_source_rgba(bc.red,bc.green,bc.blue,1);
 				ctx.paint();
 
@@ -1960,12 +1972,8 @@ public class hnwin : Gtk.ApplicationWindow {
 
 				var gxx = 0.0;								// text offset
 				var gyy = 0.0;								// text offset
-				double rsx = (ng_sizx / ng_olsz[0]);		// relative scale x
-				double rsy = (ng_sizy / ng_olsz[1]);		// relative scale y
-				double asx = (ng_sizx / ng_ogsz[0]);		// absolute scale x
-				double asy = (ng_sizy / ng_ogsz[1]);		// absolute scale y
-				double nx = (200.0 * asx);
-				double ny = (50.0 * asy);
+				double nx = (200.0 * rsx);
+				double ny = (50.0 * rsy);
 
 // text extents
 
@@ -1978,18 +1986,6 @@ public class hnwin : Gtk.ApplicationWindow {
 				for (int i = 0; i < allknodes.length; i++) {
 					ctx.text_extents (allknodes[i].nom, out extents);
 					if (extents.width > maxtents) { maxtents = extents.width; }
-				}
-
-// grab node
-
-				if (igrb) {
-					for (int i = 0; i < allknodes.length; i++) {
-						if (i == ng_node) {
-							ng_nox = (allknodes[i].pox * rsx) + ng_moom[0];
-							ng_noy = (allknodes[i].poy * rsy) + ng_moom[1];
-							break;
-						}
-					}
 				}
 
 // get selection
@@ -2016,7 +2012,17 @@ public class hnwin : Gtk.ApplicationWindow {
 
 					px = (allknodes[i].pox * asx) + ng_posx;
 					py = (allknodes[i].poy * asy) + ng_posy;
-					if (igrb) { if (i == ng_node) { px = ng_nox; py = ng_noy; } }
+
+// offset position if being dragged
+
+					if (igrb) {
+						if (i == ng_node) { 
+							px = px + ng_moom[0]; 
+							py = py + ng_moom[1];
+							ng_nox = allknodes[i].pox + (ng_moom[0] / asx);
+							ng_noy = allknodes[i].poy + (ng_moom[1] / asy);
+						}
+					}
 
 // node highlight
 
@@ -2025,13 +2031,6 @@ public class hnwin : Gtk.ApplicationWindow {
 						ctx.set_source_rgba(bc.red,bc.green,bc.blue,((float) 1.0));
 						ctx.rectangle(px, py, nx, ny);
 						ctx.fill();
-
-// node border
-
-						ctx.set_source_rgba(((float) 1.0),((float) 1.0),((float) 1.0),((float) 1.0));
-						ctx.rectangle(px,py,nx,ny);
-						ctx.set_line_width(4.0);
-						ctx.stroke();
 
 // do selection?
 
@@ -2046,13 +2045,6 @@ public class hnwin : Gtk.ApplicationWindow {
 						ctx.rectangle(px, py, nx, ny);
 						ctx.fill();
 
-// node border
-
-						bc.parse(sblines);
-						ctx.set_source_rgba(bc.red,bc.green,bc.blue,((float) 1.0));
-						ctx.rectangle(px,py,nx,ny);
-						ctx.set_line_width(4.0);
-						ctx.stroke();
 					}
 
 // node text
